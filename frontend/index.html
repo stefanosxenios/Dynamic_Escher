@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Dynamic Escher – E. coli Core</title>
+
+    <script src="https://d3js.org/d3.v5.min.js"></script>
+    <script src="https://unpkg.com/escher/dist/escher.min.js"></script>
+
+    <style>
+        :root {
+          font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+          color: #1f2a37;
+        }
+        body {
+          margin: 0;
+          background: #f7f9fb;
+        }
+        h2 {
+          margin: 24px auto 12px;
+          width: min(960px, 92vw);
+          font-size: 1.5rem;
+          font-weight: 600;
+          color: #0f172a;
+        }
+        #status {
+          width: min(960px, 92vw);
+          margin: 0 auto 16px;
+          color: #475569;
+        }
+        .hud {
+          width: min(960px, 92vw);
+          margin: 0 auto 10px;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+        .panel {
+          background: #fff;
+          border: 1px solid #e2e8f0;
+          border-radius: 12px;
+          padding: 16px 18px;
+          box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+        }
+        .controls-panel {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+        .controls-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+          gap: 12px 16px;
+          align-items: flex-end;
+        }
+        .field label {
+          display: flex;
+          font-size: 0.75rem;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+          color: #64748b;
+          margin-bottom: 4px;
+        }
+        select,
+        input {
+          width: 100%;
+          height: 36px;
+          padding: 0 12px;
+          border-radius: 8px;
+          border: 1px solid #cbd5f5;
+          background: #f8fafc;
+          font-size: 0.9rem;
+          color: #0f172a;
+        }
+        select:focus,
+        input:focus {
+          outline: none;
+          border-color: #3b82f6;
+          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
+          background: #fff;
+        }
+        .actions-row {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+        button {
+          height: 36px;
+          border-radius: 999px;
+          border: none;
+          padding: 0 18px;
+          font-weight: 600;
+          font-size: 0.88rem;
+          cursor: pointer;
+          transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+        button:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+        .primary {
+          background: linear-gradient(135deg, #2563eb, #1d4ed8);
+          color: #fff;
+          box-shadow: 0 10px 18px rgba(37, 99, 235, 0.25);
+        }
+        .ghost {
+          background: #eef2ff;
+          color: #1d4ed8;
+        }
+        button:hover:not(:disabled) {
+          transform: translateY(-1px);
+        }
+        .feedback {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 12px;
+          align-items: center;
+        }
+        .loading-pill {
+          display: none;
+          align-items: center;
+          gap: 10px;
+          font-weight: 600;
+          color: #1d4ed8;
+          background: #eef2ff;
+          border-radius: 999px;
+          padding: 6px 14px;
+        }
+        .spinner {
+          border: 3px solid rgba(148, 163, 184, 0.4);
+          border-top: 3px solid #1d4ed8;
+          border-radius: 50%;
+          width: 18px;
+          height: 18px;
+          animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        .status-text {
+          font-size: 0.85rem;
+          font-weight: 600;
+        }
+        .secondary-panel {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+          gap: 12px;
+        }
+        .panel-section h3 {
+          margin: 0 0 6px;
+          font-size: 0.92rem;
+          color: #334155;
+        }
+        textarea {
+          width: 80%;
+          border-radius: 10px;
+          border: 1px solid #d3dae6;
+          padding: 10px;
+          font-size: 0.9rem;
+          background: #f8fafc;
+          resize: vertical;
+          min-height: 48px;
+        }
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 0.85rem;
+        }
+        th, td {
+          border-bottom: 1px solid #e2e8f0;
+          padding: 8px 6px;
+          text-align: left;
+        }
+        th {
+          font-size: 0.78rem;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+          color: #94a3b8;
+        }
+        #map {
+          width: 100%;
+          height: calc(100vh - 220px);
+          min-height: 520px;
+          background: #e2e8f0;
+        }
+        @media (max-width: 640px) {
+          button {
+            flex: 1;
+            text-align: center;
+          }
+          .actions-row {
+            flex-direction: column;
+          }
+        }
+    </style>
+</head>
+
+<body>
+<h2>Metabolic Hub – E. coli Core</h2>
+<p id="status">Loading map and reference fluxes…</p>
+
+<div class="hud">
+  <div class="panel controls-panel">
+    <div class="controls-grid">
+      <div class="field">
+        <label for="reaction_select">Reaction</label>
+        <select id="reaction_select">
+            <option value="">Loading…</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="fold_input">Fold Change</label>
+        <input id="fold_input" type="number" step="0.1" value="1.0">
+      </div>
+    </div>
+
+    <div class="actions-row">
+      <button class="primary" onclick="addPerturbation()">Add Perturbation</button>
+      <button class="ghost" onclick="clearPerturbations()">Clear All</button>
+      <button class="ghost" id="reset_btn" onclick="resetFluxes()">Reset to Steady State</button>
+      <button class="primary" id="run_btn" onclick="runSimulation()">Run Simulation</button>
+    </div>
+
+    <div class="feedback">
+      <div id="loading" class="loading-pill">
+        <span class="spinner"></span>
+        Running simulation…
+      </div>
+      <div id="sim_status" class="status-text"></div>
+    </div>
+  </div>
+
+  <div class="panel secondary-panel">
+    <div class="panel-section">
+      <h3>Experiment Description</h3>
+      <textarea id="experiment_box" rows="3"></textarea>
+    </div>
+    <div class="panel-section">
+      <h3>Perturbations</h3>
+      <table id="pert_table">
+          <tr><th>Reaction</th><th>Fold Change</th></tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- MAP -->
+<div id="map"></div>
+
+<script>
+let builder = null;
+let original_fluxes = {};
+let all_reactions = [];
+let perturbations = {};    // { enzyme: fold }
+
+async function loadEscher() {
+    try {
+        const resp = await fetch("http://127.0.0.1:8000/models/ecoli_core/initial_view");
+        const data = await resp.json();
+
+        original_fluxes = data.reference.fluxes;
+        all_reactions = data.model_json.reactions.map(r => r.id);
+
+        populateReactionDropdown();
+
+        builder = new escher.Builder(
+            data.map_json,
+            data.model_json,
+            null,
+            d3.select('#map'),
+            { menu: 'zoom', scroll_behavior: 'zoom' }
+        );
+        builder.set_reaction_data(original_fluxes);
+
+        document.getElementById("status").textContent = "Map loaded.";
+    } catch (err) {
+        document.getElementById("status").textContent = "Failed to load map.";
+    }
+}
+
+function populateReactionDropdown() {
+    const sel = document.getElementById("reaction_select");
+    sel.innerHTML = "";
+    all_reactions.forEach(r => {
+        const opt = document.createElement("option");
+        opt.value = opt.textContent = r;
+        sel.appendChild(opt);
+    });
+}
+
+/*************** ADD PERTURBATION ***************/
+function addPerturbation() {
+    const r = document.getElementById("reaction_select").value;
+    const fold = parseFloat(document.getElementById("fold_input").value);
+    if (!r) return alert("Select a reaction.");
+
+    perturbations[r] = fold;
+    updatePertTable();
+    updateExperimentBox();
+}
+
+function updatePertTable() {
+    const table = document.getElementById("pert_table");
+    table.innerHTML = "<tr><th>Reaction</th><th>Fold Change</th></tr>";
+
+    Object.entries(perturbations).forEach(([r, f]) => {
+        const row = document.createElement("tr");
+        row.innerHTML = `<td>${r}</td><td>${f}</td>`;
+        table.appendChild(row);
+    });
+}
+
+function clearPerturbations() {
+    perturbations = {};
+    updatePertTable();
+    updateExperimentBox();
+}
+
+/*************** UPDATE EXPERIMENT DESCRIPTION ***************/
+function updateExperimentBox() {
+    let text = "Perturbations:\n";
+    if (Object.keys(perturbations).length === 0) {
+        text += "None";
+    } else {
+        for (const [r, f] of Object.entries(perturbations)) {
+            text += `- ${r}: ${f}×\n`;
+        }
+    }
+    document.getElementById("experiment_box").value = text;
+}
+
+/*************** RUN SIMULATION ***************/
+async function runSimulation() {
+    if (!builder) return;
+    if (Object.keys(perturbations).length === 0)
+        return alert("Add at least one perturbation.");
+
+    const loading = document.getElementById("loading");
+    const button = document.getElementById("run_btn");
+    const status = document.getElementById("sim_status");
+
+    loading.style.display = "flex";
+    button.disabled = true;
+    status.textContent = "";
+
+    try {
+        const resp = await fetch("http://127.0.0.1:8000/simulate_fluxes", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ perturbations })
+        });
+
+        const data = await resp.json();
+        builder.set_reaction_data(data.fluxes);
+
+        status.style.color = "green";
+        status.textContent = "Simulation complete!";
+    }
+    catch (err) {
+        status.style.color = "red";
+        status.textContent = "Simulation failed.";
+    }
+    finally {
+        loading.style.display = "none";
+        button.disabled = false;
+    }
+}
+
+/*************** RESET ***************/
+function resetFluxes() {
+    builder.set_reaction_data(original_fluxes);
+    document.getElementById("sim_status").textContent = "Reset to steady state.";
+}
+
+// INIT
+loadEscher();
+</script>
+
+</body>
+</html>
+
+
+
+
+
+

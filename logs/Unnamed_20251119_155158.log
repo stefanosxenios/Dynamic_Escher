@@ -1,0 +1,1 @@
+2025-11-19 15:51:59,029 - Unnamed - WARNING - Non integer stoichiometries found ['BIOMASS_Ecoli_core_w_GAM', 'CYTBD'] change to integer for linear dependencies
